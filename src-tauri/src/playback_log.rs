@@ -337,7 +337,10 @@ mod tests {
 
     #[test]
     fn connection_timeout_and_policy_errors_keep_their_categories() {
-        assert_eq!(error_kind("client error (Connect) ← operation timed out"), "timeout");
+        assert_eq!(
+            error_kind("client error (Connect) ← operation timed out"),
+            "timeout"
+        );
         assert_eq!(error_kind("request timeout"), "timeout");
         assert_eq!(error_kind("DNS 解析超时"), "dns_error");
         assert_eq!(error_kind("禁止访问普通内网"), "private_address_denied");
@@ -377,7 +380,10 @@ mod tests {
         // 导出的就是 JSONL 本体：环境记录 + 每行事件，一行一个对象，不掺纯文本。
         assert!(text.contains("\"diagnostics.env\""));
         for line in text.lines() {
-            assert!(line.starts_with('{') && line.ends_with('}'), "不是 JSONL 行: {line}");
+            assert!(
+                line.starts_with('{') && line.ends_with('}'),
+                "不是 JSONL 行: {line}"
+            );
             serde_json::from_str::<Value>(line).expect("导出行必须可解析");
         }
         bind(&dir);

@@ -24,10 +24,6 @@ impl EdgeV1Client {
         Self { origin, token }
     }
 
-    pub fn origin(&self) -> &str {
-        &self.origin
-    }
-
     pub async fn call(
         &self,
         method: &str,

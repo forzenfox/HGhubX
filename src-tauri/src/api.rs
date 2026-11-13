@@ -153,7 +153,11 @@ pub async fn check_update() -> Result<Value, String> {
     };
 
     // 顺手把「这个平台该下哪个包」挑出来，前端好直接应用内更新
-    let assets = v.get("assets").and_then(Value::as_array).cloned().unwrap_or_default();
+    let assets = v
+        .get("assets")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let asset = assets
         .iter()
         .filter_map(|a| {
@@ -204,9 +208,17 @@ fn asset_rank(name: &str) -> u8 {
             2
         }
     } else if cfg!(target_os = "windows") {
-        if n.ends_with(".exe") { 3 } else { 0 }
+        if n.ends_with(".exe") {
+            3
+        } else {
+            0
+        }
     } else if cfg!(target_os = "macos") {
-        if n.ends_with(".dmg") { 3 } else { 0 }
+        if n.ends_with(".dmg") {
+            3
+        } else {
+            0
+        }
     } else if n.ends_with(".deb") {
         3
     } else if n.ends_with(".appimage") {
@@ -284,11 +296,13 @@ fn request_ios_orientation(landscape: bool) {
         // UIInterfaceOrientationMaskPortrait = 1 << 1 = 2
         // UIInterfaceOrientationMaskLandscapeRight = 1 << 3 = 8
         let mask: usize = if landscape { 8 } else { 2 };
-        let prefs_cls = objc_getClass(b"UIWindowSceneGeometryPreferencesIOS\0".as_ptr() as *const c_char);
+        let prefs_cls =
+            objc_getClass(b"UIWindowSceneGeometryPreferencesIOS\0".as_ptr() as *const c_char);
         let app_cls = objc_getClass(b"UIApplication\0".as_ptr() as *const c_char);
         if !prefs_cls.is_null() && !app_cls.is_null() {
             let sel_alloc = sel_registerName(b"alloc\0".as_ptr() as *const c_char);
-            let sel_init = sel_registerName(b"initWithInterfaceOrientations:\0".as_ptr() as *const c_char);
+            let sel_init =
+                sel_registerName(b"initWithInterfaceOrientations:\0".as_ptr() as *const c_char);
             let raw_prefs = msg0(prefs_cls, sel_alloc);
             let prefs = if !raw_prefs.is_null() {
                 msg1_usize(raw_prefs, sel_init, mask)
@@ -306,13 +320,19 @@ fn request_ios_orientation(landscape: bool) {
                     let arr = msg0(scenes_set, sel_all);
                     if !arr.is_null() {
                         let sel_count = sel_registerName(b"count\0".as_ptr() as *const c_char);
-                        let sel_at = sel_registerName(b"objectAtIndex:\0".as_ptr() as *const c_char);
+                        let sel_at =
+                            sel_registerName(b"objectAtIndex:\0".as_ptr() as *const c_char);
                         let sel_req = sel_registerName(
-                            b"requestGeometryUpdateWithPreferences:errorHandler:\0".as_ptr() as *const c_char,
+                            b"requestGeometryUpdateWithPreferences:errorHandler:\0".as_ptr()
+                                as *const c_char,
                         );
-                        let sel_responds = sel_registerName(b"respondsToSelector:\0".as_ptr() as *const c_char);
-                        let msg_responds: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> bool =
-                            std::mem::transmute(objc_msgSend as *const ());
+                        let sel_responds =
+                            sel_registerName(b"respondsToSelector:\0".as_ptr() as *const c_char);
+                        let msg_responds: unsafe extern "C" fn(
+                            *mut c_void,
+                            *mut c_void,
+                            *mut c_void,
+                        ) -> bool = std::mem::transmute(objc_msgSend as *const ());
                         let count = msg0_usize(arr, sel_count);
                         for i in 0..count {
                             let scene = msg1_usize(arr, sel_at, i);
@@ -337,15 +357,20 @@ fn request_ios_orientation(landscape: bool) {
             let orient_val: usize = if landscape { 3 } else { 1 };
             let num = msg1_usize(num_cls, sel_num, orient_val);
             let sel_str = sel_registerName(b"stringWithUTF8String:\0".as_ptr() as *const c_char);
-            let msg_str: unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char) -> *mut c_void =
-                std::mem::transmute(objc_msgSend as *const ());
+            let msg_str: unsafe extern "C" fn(
+                *mut c_void,
+                *mut c_void,
+                *const c_char,
+            ) -> *mut c_void = std::mem::transmute(objc_msgSend as *const ());
             let key = msg_str(str_cls, sel_str, b"orientation\0".as_ptr() as *const c_char);
             if !dev.is_null() && !num.is_null() && !key.is_null() {
                 let sel_set_val = sel_registerName(b"setValue:forKey:\0".as_ptr() as *const c_char);
                 msg2_ptr(dev, sel_set_val, num, key);
             }
             if !vc_cls.is_null() {
-                let sel_attempt = sel_registerName(b"attemptRotationToDeviceOrientation\0".as_ptr() as *const c_char);
+                let sel_attempt = sel_registerName(
+                    b"attemptRotationToDeviceOrientation\0".as_ptr() as *const c_char,
+                );
                 msg1_void(vc_cls, sel_attempt);
             }
         }
@@ -514,7 +539,9 @@ pub async fn api_tag_videos(
 ) -> Result<Value, String> {
     let encoded: String = url::form_urlencoded::byte_serialize(tag.as_bytes()).collect();
     state
-        .get(&format!("/api/videos/tag/{encoded}?page={page}&size={size}"))
+        .get(&format!(
+            "/api/videos/tag/{encoded}?page={page}&size={size}"
+        ))
         .await
 }
 
@@ -560,7 +587,9 @@ pub async fn api_search(
         _ => "",
     };
     state
-        .get(&format!("/api/search?q={encoded}&page={page}&size={size}{scope}"))
+        .get(&format!(
+            "/api/search?q={encoded}&page={page}&size={size}{scope}"
+        ))
         .await
 }
 
@@ -608,7 +637,9 @@ fn non_empty(v: Option<&Value>) -> Option<&Value> {
 /// 把新接口返回的 streams.main / streams.hevc 回填到 video_url / video_url_hevc，
 /// 前端只认 video_url，旧字段缺失时也兼容。
 fn normalize_play_info(info: &mut Value) {
-    let Some(obj) = info.as_object_mut() else { return };
+    let Some(obj) = info.as_object_mut() else {
+        return;
+    };
     for (field, key) in [("video_url", "main"), ("video_url_hevc", "hevc")] {
         let url = obj
             .get("streams")
@@ -778,7 +809,9 @@ pub async fn api_post_category(
 ) -> Result<Value, String> {
     let encoded: String = url::form_urlencoded::byte_serialize(route.as_bytes()).collect();
     state
-        .get(&format!("/api/posts/category/{encoded}?page={page}&size={size}"))
+        .get(&format!(
+            "/api/posts/category/{encoded}?page={page}&size={size}"
+        ))
         .await
 }
 
@@ -790,13 +823,13 @@ pub async fn api_related(state: State<'_, Api>, id: i64) -> Result<Value, String
 
 /// 关注流：`/api/videos/following`（需登录）。
 #[tauri::command]
-pub async fn api_following(
-    state: State<'_, Api>,
-    page: u32,
-    size: u32,
-) -> Result<Value, String> {
+pub async fn api_following(state: State<'_, Api>, page: u32, size: u32) -> Result<Value, String> {
     state
-        .authed("GET", &format!("/api/videos/following?page={page}&size={size}"), None)
+        .authed(
+            "GET",
+            &format!("/api/videos/following?page={page}&size={size}"),
+            None,
+        )
         .await
 }
 

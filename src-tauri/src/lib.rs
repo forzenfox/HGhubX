@@ -2,9 +2,9 @@ mod adapters;
 mod api;
 mod commands;
 mod domain;
+mod infra;
 #[cfg(target_os = "ios")]
 mod ios_layout;
-mod infra;
 #[cfg(target_os = "linux")]
 mod linux_http;
 mod logging;
@@ -15,7 +15,6 @@ mod media_dns;
 mod net;
 mod network_policy;
 mod playback_log;
-mod ports;
 mod services;
 mod session;
 

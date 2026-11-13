@@ -7,7 +7,6 @@ mod mapper;
 pub use client::EdgeV1Client;
 pub use dto::*;
 
-use crate::ports::SourcePort;
 use serde_json::json;
 
 pub struct EdgeV1Adapter {
@@ -256,7 +255,10 @@ impl EdgeV1Adapter {
         let body = json!({});
         let primary = self
             .client
-            .post(&format!("/api/videos/{id}/episodes/{ep}/playback"), Some(&body))
+            .post(
+                &format!("/api/videos/{id}/episodes/{ep}/playback"),
+                Some(&body),
+            )
             .await
             .and_then(|data| {
                 let info = mapper::map_play_info(&data);
@@ -350,7 +352,10 @@ impl EdgeV1Adapter {
     }
 
     pub async fn related(&self, id: i64) -> Result<Vec<VideoCard>, String> {
-        let data = self.client.get(&format!("/api/videos/{id}/related")).await?;
+        let data = self
+            .client
+            .get(&format!("/api/videos/{id}/related"))
+            .await?;
         Ok(mapper::map_paged_videos(&data).items)
     }
 
@@ -368,7 +373,10 @@ impl EdgeV1Adapter {
         Ok(mapper::map_user(&data))
     }
 
-    pub async fn user_stats(&self, id: i64) -> Result<std::collections::BTreeMap<String, i64>, String> {
+    pub async fn user_stats(
+        &self,
+        id: i64,
+    ) -> Result<std::collections::BTreeMap<String, i64>, String> {
         let data = self.client.get(&format!("/api/users/{id}/stats")).await?;
         let mut stats = mapper::map_user_stats(&data);
         stats.insert("user_id".to_string(), id);
@@ -386,15 +394,5 @@ impl EdgeV1Adapter {
             .get(&format!("/api/videos/user/{id}?page={page}&size={size}"))
             .await?;
         Ok(mapper::map_paged_videos(&data))
-    }
-}
-
-impl SourcePort for EdgeV1Adapter {
-    fn adapter(&self) -> &'static str {
-        "edge_v1"
-    }
-
-    fn origin(&self) -> &str {
-        self.client.origin()
     }
 }

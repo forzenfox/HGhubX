@@ -128,6 +128,12 @@ pub fn allowed_ip(ip: IpAddr) -> bool {
                 return allowed_ip(IpAddr::V4(v4));
             }
             let s = ip.segments();
+            // IPv6 FakeIP：mihomo/Clash 等代理默认用 2001:2::/48，与 IPv4 的
+            // 198.18.0.0/15 同一用途，必须按例外放行，否则 A/AAAA 同时返回
+            // 伪造地址时整个域名会被判为内网而无法访问。
+            if s[0] == 0x2001 && s[1] == 0x0002 && s[2] == 0x0000 {
+                return true;
+            }
             // 仅全球单播；NAT64 已在上面按 IPv4 判定，这里拒绝 ULA、链路本地、回环、
             // 组播、6to4/Teredo 等其他特殊段。
             (s[0] & 0xe000) == 0x2000
@@ -178,7 +184,7 @@ fn check_ip(ip: IpAddr) -> Result<(), String> {
     if allowed_ip(ip) {
         Ok(())
     } else {
-        Err("禁止访问普通内网、回环或保留地址（仅放行 FakeIP 198.18.0.0/15）".into())
+        Err("禁止访问普通内网、回环或保留地址（仅放行 FakeIP 198.18.0.0/15 与 2001:2::/48）".into())
     }
 }
 
@@ -340,14 +346,39 @@ mod tests {
 
     #[test]
     fn reserved_ipv6_subranges_are_covered_by_the_existing_block() {
-        for raw in [
-            "2001:2::1",
-            "2001:2:ffff:ffff:ffff:ffff:ffff:ffff",
-            "2001:10::1",
-            "2001:1f:ffff:ffff:ffff:ffff:ffff:ffff",
-        ] {
+        for raw in ["2001:10::1", "2001:1f:ffff:ffff:ffff:ffff:ffff:ffff"] {
             assert!(!allowed_ip(raw.parse().unwrap()), "{raw}");
         }
+    }
+
+    #[test]
+    fn fakeip_v6_range_is_allowed_like_fakeip_v4() {
+        // mihomo/Clash 的 IPv6 FakeIP 默认段，A/AAAA 会同时返回伪造地址。
+        for raw in [
+            "2001:2::e",
+            "2001:2::1bd",
+            "2001:2:0:ffff:ffff:ffff:ffff:ffff",
+        ] {
+            assert!(allowed_ip(raw.parse().unwrap()), "{raw}");
+        }
+        // /48 之外的同前缀地址仍然按保留段拒绝。
+        for raw in ["2001:2:1::1", "2001:3::1", "2001:1::1"] {
+            assert!(!allowed_ip(raw.parse().unwrap()), "{raw}");
+        }
+    }
+
+    #[test]
+    fn mixed_fakeip_v4_and_v6_answers_pass_the_guard() {
+        let mixed = [
+            "198.18.0.14:443".parse().unwrap(),
+            "[2001:2::e]:443".parse().unwrap(),
+        ];
+        assert!(check_addresses_with_mode(&mixed, true).is_ok());
+        let poisoned = [
+            "1.1.1.1:443".parse().unwrap(),
+            "[2001:db8::1]:443".parse().unwrap(),
+        ];
+        assert!(check_addresses_with_mode(&poisoned, true).is_err());
     }
 
     #[test]

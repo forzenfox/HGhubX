@@ -40,10 +40,7 @@ pub async fn dispatch(api: &Api, command: DomainCommand) -> Result<Value, String
             password,
             confirm_password,
             email,
-        } => {
-            account_service::register(api, username, password, confirm_password, email)
-                .await
-        }
+        } => account_service::register(api, username, password, confirm_password, email).await,
         DomainCommand::Logout => account_service::logout(api).await,
         DomainCommand::Me => account_service::me(api).await,
         DomainCommand::Feed { page, size } => catalog_service::feed(api, page, size).await,
@@ -57,9 +54,12 @@ pub async fn dispatch(api: &Api, command: DomainCommand) -> Result<Value, String
             catalog_service::category(api, cate, page, size).await
         }
         DomainCommand::Rank { kind } => catalog_service::rank(api, kind).await,
-        DomainCommand::Search { q, page, size, kind } => {
-            catalog_service::search(api, q, page, size, kind).await
-        }
+        DomainCommand::Search {
+            q,
+            page,
+            size,
+            kind,
+        } => catalog_service::search(api, q, page, size, kind).await,
         DomainCommand::SearchHot => catalog_service::search_hot(api).await,
         DomainCommand::Posts { page, size } => post_service::posts(api, page, size).await,
         DomainCommand::Post { id } => post_service::post(api, id).await,

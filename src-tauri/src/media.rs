@@ -286,9 +286,19 @@ pub async fn load_segment(url: &str) -> Result<(Option<String>, Arc<Vec<u8>>), S
     let len = bytes.len();
     let arc = Arc::new(bytes);
     if len <= 65536 {
-        cache_put(&KEY_CACHE, url.to_string(), (mime.clone(), arc.clone()), KEY_CACHE_MAX);
+        cache_put(
+            &KEY_CACHE,
+            url.to_string(),
+            (mime.clone(), arc.clone()),
+            KEY_CACHE_MAX,
+        );
     } else if len <= SEG_CACHE_MAX_BYTES {
-        cache_put(&SEG_CACHE, url.to_string(), (mime.clone(), arc.clone()), SEG_CACHE_MAX);
+        cache_put(
+            &SEG_CACHE,
+            url.to_string(),
+            (mime.clone(), arc.clone()),
+            SEG_CACHE_MAX,
+        );
     }
     Ok((Some(mime), arc))
 }
@@ -319,7 +329,10 @@ fn respond(status: u16, ctype: &str, body: Vec<u8>, cache: &str) -> Response<Vec
         // WKWebView 需要 Content-Length / Accept-Ranges 才肯复用已缓冲的分片
         .header("Content-Length", len)
         .header("Accept-Ranges", "bytes")
-        .header("Access-Control-Expose-Headers", "Content-Length, Content-Type, Accept-Ranges")
+        .header(
+            "Access-Control-Expose-Headers",
+            "Content-Length, Content-Type, Accept-Ranges",
+        )
         .header("X-Content-Type-Options", "nosniff")
         .header("Cache-Control", cache)
         .body(body)
@@ -404,7 +417,9 @@ pub async fn handle(path: &str, query: &str, origin: &str) -> Response<Vec<u8>> 
             Err(e) => respond(502, "text/plain", e.into_bytes(), "no-store"),
         },
         "/seg" => match load_segment(&target).await {
-            Ok((ctype, bytes)) => segment_response(&target, ctype.as_deref(), bytes.as_ref().clone(), origin),
+            Ok((ctype, bytes)) => {
+                segment_response(&target, ctype.as_deref(), bytes.as_ref().clone(), origin)
+            }
             Err(e) => respond(502, "text/plain", e.into_bytes(), "no-store"),
         },
         _ => respond(404, "text/plain", b"not found".to_vec(), "no-store"),
@@ -536,7 +551,9 @@ mod tests {
         );
         // 分片必须绝对化到源站，并保留签名查询串。
         assert!(
-            body.contains("https%3A%2F%2Fcdn%2Eexample%2Fvideos5%2Fabc%2Fseg%2D1%2Ets%3Fauth%5Fkey%3D"),
+            body.contains(
+                "https%3A%2F%2Fcdn%2Eexample%2Fvideos5%2Fabc%2Fseg%2D1%2Ets%3Fauth%5Fkey%3D"
+            ),
             "segment not absolutized with query: {body}"
         );
         // 加密 KEY 也要走本地代理，否则 hls.js 会直接打源站被 CORS 拦住。

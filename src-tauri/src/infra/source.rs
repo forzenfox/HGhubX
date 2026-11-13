@@ -166,7 +166,10 @@ mod tests {
     #[test]
     fn door_normalization_is_zero_validation() {
         assert_eq!(normalize_door(" example.com "), "https://example.com/");
-        assert_eq!(normalize_door("https://example.com"), "https://example.com/");
+        assert_eq!(
+            normalize_door("https://example.com"),
+            "https://example.com/"
+        );
         assert_eq!(
             normalize_door("https://example.com/path/?x=1"),
             "https://example.com/path/?x=1/"

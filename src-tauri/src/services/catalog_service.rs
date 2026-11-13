@@ -36,7 +36,13 @@ pub async fn rank(api: &Api, kind: String) -> Result<Value, String> {
     Ok(json!({ "type": kind, "items": adapter(api).rank(kind).await? }))
 }
 
-pub async fn search(api: &Api, q: String, page: u32, size: u32, kind: String) -> Result<Value, String> {
+pub async fn search(
+    api: &Api,
+    q: String,
+    page: u32,
+    size: u32,
+    kind: String,
+) -> Result<Value, String> {
     adapter(api).search(&q, page, size, &kind).await
 }
 

@@ -30,9 +30,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// 默认上游：门牌化后没有内置源，必须由用户输入地址激活。
-pub const DEFAULT_BASE: &str = "";
-
 /// 当前门牌基址（不带结尾斜杠）。唯一来源是 [`crate::infra::source`]。
 pub fn base() -> String {
     crate::infra::source::base()
@@ -97,7 +94,10 @@ async fn client_for(raw: &str) -> Result<(url::Url, Arc<reqwest::Client>), Strin
     client_for_dns(raw, false).await
 }
 
-async fn client_for_dns(raw: &str, public_dns: bool) -> Result<(url::Url, Arc<reqwest::Client>), String> {
+async fn client_for_dns(
+    raw: &str,
+    public_dns: bool,
+) -> Result<(url::Url, Arc<reqwest::Client>), String> {
     let strict = network_policy::strict_security();
     let target = network_policy::parse_target_with_mode(raw, strict)?;
     let host = target.host_str().ok_or("目标缺少主机名")?;
@@ -115,7 +115,10 @@ async fn client_for_dns(raw: &str, public_dns: bool) -> Result<(url::Url, Arc<re
         network_policy::check_addresses_with_mode(&resolution.addresses, strict)?;
         (resolution.addresses, CLIENT_TTL.min(resolution.ttl))
     } else if strict {
-        (network_policy::resolve_target(&target, strict).await?, CLIENT_TTL)
+        (
+            network_policy::resolve_target(&target, strict).await?,
+            CLIENT_TTL,
+        )
     } else {
         (Vec::new(), CLIENT_TTL)
     };
@@ -378,9 +381,20 @@ async fn tcp_probe(addr: Option<SocketAddr>, timeout: Duration) -> Value {
 /// 把三组探测结果压成一句人话结论 + 可执行的建议，issue 里一眼能看懂。
 fn verdict(dns: &Value, tcp: &Value, http: &Value) -> (&'static str, String, Vec<String>) {
     let dns_err = dns.get("error").and_then(|v| v.as_str());
-    let fake = dns.get("has_fake_ip").and_then(|v| v.as_bool()).unwrap_or(false);
-    let kinds = dns.get("kinds").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-    let suspicious = dns.get("suspicious").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let fake = dns
+        .get("has_fake_ip")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let kinds = dns
+        .get("kinds")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let suspicious = dns
+        .get("suspicious")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     let status = http.get("status").and_then(|v| v.as_u64());
     let http_err = http.get("error").and_then(|v| v.as_str()).unwrap_or("");
     let tcp_ok = tcp.get("ok").and_then(|v| v.as_bool());
@@ -389,7 +403,8 @@ fn verdict(dns: &Value, tcp: &Value, http: &Value) -> (&'static str, String, Vec
     if dns_err.is_some() && status.is_some() {
         return (
             "dns_false_alarm",
-            "DNS 探测自身失败，但 HTTP 实际可以连通（系统 resolver 异常或被代理接管），不影响使用".into(),
+            "DNS 探测自身失败，但 HTTP 实际可以连通（系统 resolver 异常或被代理接管），不影响使用"
+                .into(),
             vec![],
         );
     }
@@ -443,15 +458,24 @@ fn verdict(dns: &Value, tcp: &Value, http: &Value) -> (&'static str, String, Vec
         );
     }
     if tcp_ok == Some(false) {
-        let timeout = tcp.get("timeout").and_then(|v| v.as_bool()).unwrap_or(false);
+        let timeout = tcp
+            .get("timeout")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         return (
-            if timeout { "tcp_timeout" } else { "tcp_refused" },
+            if timeout {
+                "tcp_timeout"
+            } else {
+                "tcp_refused"
+            },
             if timeout {
                 "DNS 正常，但 TCP 连接无响应（SYN 被丢弃）：运营商或防火墙阻断".to_string()
             } else {
                 format!(
                     "DNS 正常，但 TCP 连接被拒绝：{}",
-                    tcp.get("error").and_then(|v| v.as_str()).unwrap_or("未知原因")
+                    tcp.get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("未知原因")
                 )
             },
             vec![
@@ -480,11 +504,9 @@ fn verdict(dns: &Value, tcp: &Value, http: &Value) -> (&'static str, String, Vec
         );
     }
     match status {
-        Some(code) if (200..400).contains(&code) => (
-            "ok",
-            format!("连通正常（HTTP {code}），线路可用"),
-            vec![],
-        ),
+        Some(code) if (200..400).contains(&code) => {
+            ("ok", format!("连通正常（HTTP {code}），线路可用"), vec![])
+        }
         Some(code) => (
             "http_status",
             format!("域名与网络都通，但服务端返回 HTTP {code}"),
@@ -835,9 +857,17 @@ pub async fn fetch_bytes(url: &str) -> Result<(Option<String>, Vec<u8>), String>
     let mut attempt = 0;
     let url = url.to_string();
     let target = url::Url::parse(&url).ok();
-    let host = target.as_ref().and_then(|target| target.host_str()).unwrap_or("").to_string();
-    let public_dns = AtomicBool::new(MEDIA_DNS_ROUTES.lock().ok()
-        .is_some_and(|routes| routes.prefers_public(&host, Instant::now())));
+    let host = target
+        .as_ref()
+        .and_then(|target| target.host_str())
+        .unwrap_or("")
+        .to_string();
+    let public_dns = AtomicBool::new(
+        MEDIA_DNS_ROUTES
+            .lock()
+            .ok()
+            .is_some_and(|routes| routes.prefers_public(&host, Instant::now())),
+    );
     let referer = format!("{}/", base());
     with_retry(true, || {
         attempt += 1;
@@ -913,9 +943,14 @@ mod tests {
             format!("{}:{host}:{port}:false", network_policy::strict_security()),
             (Instant::now() + CLIENT_TTL, Arc::new(failed_client)),
         );
-        let (_, bytes) = fetch_bytes(&raw).await.expect("备用 DNS 应恢复真实媒体下载");
+        let (_, bytes) = fetch_bytes(&raw)
+            .await
+            .expect("备用 DNS 应恢复真实媒体下载");
         assert!(!bytes.is_empty());
-        assert!(MEDIA_DNS_ROUTES.lock().unwrap().prefers_public(host, Instant::now()));
+        assert!(MEDIA_DNS_ROUTES
+            .lock()
+            .unwrap()
+            .prefers_public(host, Instant::now()));
         let (_, again) = fetch_bytes(&raw).await.expect("后续请求应复用恢复的路径");
         if bytes.starts_with(b"#EXTM3U") {
             assert!(again.starts_with(b"#EXTM3U"));
@@ -1071,11 +1106,6 @@ mod tests {
         for raw in ["alice:secret@127.0.0.1:7897", "not a url secret", ""] {
             assert_eq!(redact_proxy(raw), "[已配置，原始值已隐藏]");
         }
-    }
-
-    #[test]
-    fn default_base_is_empty_until_the_door_is_activated() {
-        assert!(DEFAULT_BASE.is_empty());
     }
 
     #[tokio::test]

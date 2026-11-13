@@ -31,7 +31,11 @@ fn text(v: &Value, keys: &[&str]) -> String {
 
 fn opt_text(v: &Value, keys: &[&str]) -> Option<String> {
     let s = text(v, keys);
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 fn i64v(v: &Value, keys: &[&str]) -> i64 {
@@ -170,7 +174,12 @@ pub fn map_pagination(v: &Value) -> Pagination {
     if pages == 0 && total > 0 {
         pages = (total + size - 1) / size;
     }
-    Pagination { page, pages, size, total }
+    Pagination {
+        page,
+        pages,
+        size,
+        total,
+    }
 }
 
 pub fn map_paged_videos(v: &Value) -> Paged<VideoCard> {
@@ -189,7 +198,10 @@ pub fn map_paged_videos(v: &Value) -> Paged<VideoCard> {
             .unwrap_or_default(),
         _ => Vec::new(),
     };
-    Paged { items, pagination: map_pagination(v) }
+    Paged {
+        items,
+        pagination: map_pagination(v),
+    }
 }
 
 pub fn map_topics(v: &Value) -> Vec<TopicCard> {
@@ -312,18 +324,22 @@ pub fn map_post_categories(v: &Value) -> Vec<PostCategory> {
 }
 
 pub fn map_post(v: &Value) -> Post {
-    let author = get(v, "author").or_else(|| get(v, "user")).map(|u| PostAuthor {
-        id: i64v(u, &["id", "user_id"]),
-        name: text(u, &["name", "nickname", "username"]),
-        avatar: opt_text(u, &["avatar", "avatar_url"]),
-    });
-    let counts = get(v, "counts").or_else(|| get(v, "stats")).map(|c| PostCounts {
-        like: i64v(c, &["like", "like_count"]),
-        comment: i64v(c, &["comment", "comment_count"]),
-        collect: i64v(c, &["collect", "collect_count"]),
-        share: Some(i64v(c, &["share", "share_count"])),
-        hot: Some(i64v(c, &["hot", "hot_count"])),
-    });
+    let author = get(v, "author")
+        .or_else(|| get(v, "user"))
+        .map(|u| PostAuthor {
+            id: i64v(u, &["id", "user_id"]),
+            name: text(u, &["name", "nickname", "username"]),
+            avatar: opt_text(u, &["avatar", "avatar_url"]),
+        });
+    let counts = get(v, "counts")
+        .or_else(|| get(v, "stats"))
+        .map(|c| PostCounts {
+            like: i64v(c, &["like", "like_count"]),
+            comment: i64v(c, &["comment", "comment_count"]),
+            collect: i64v(c, &["collect", "collect_count"]),
+            share: Some(i64v(c, &["share", "share_count"])),
+            hot: Some(i64v(c, &["hot", "hot_count"])),
+        });
     Post {
         id: i64v(v, &["id", "post_id"]),
         title: text(v, &["title", "name"]),
@@ -348,14 +364,20 @@ pub fn map_posts(v: &Value) -> Paged<Post> {
         .iter()
         .map(map_post)
         .collect();
-    Paged { items, pagination: map_pagination(v) }
+    Paged {
+        items,
+        pagination: map_pagination(v),
+    }
 }
 
 pub fn map_post_playback(v: &Value) -> PostPlayback {
     let videos = array(v, &["videos", "items", "playlist"])
         .iter()
         .filter_map(|item| match item {
-            Value::String(url) => Some(PostVideo { url: url.clone(), ..Default::default() }),
+            Value::String(url) => Some(PostVideo {
+                url: url.clone(),
+                ..Default::default()
+            }),
             Value::Object(_) => Some(PostVideo {
                 url: text(item, &["url", "video_url", "src"]),
                 title: opt_text(item, &["title", "name"]),
@@ -416,15 +438,17 @@ pub fn map_detail(v: &Value) -> Detail {
         description: text(detail, &["description", "desc", "intro"]),
         cover: text(detail, &["cover", "cover_url"]),
         tags: strings(detail, &["tags"]),
-        tag_links: get(detail, "tag_links").and_then(Value::as_array).map(|items| {
-            items
-                .iter()
-                .map(|item| TagLink {
-                    name: text(item, &["name"]),
-                    url: text(item, &["url"]),
-                })
-                .collect()
-        }),
+        tag_links: get(detail, "tag_links")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|item| TagLink {
+                        name: text(item, &["name"]),
+                        url: text(item, &["url"]),
+                    })
+                    .collect()
+            }),
         score: f64v(detail, &["score", "rating"]),
         episode_count: i64v(detail, &["episode_count", "ep_count"]),
         total_episodes: i64v(detail, &["total_episodes", "total_ep"]),
@@ -438,14 +462,22 @@ pub fn map_detail(v: &Value) -> Detail {
             })
             .collect(),
         counts: Counts {
-            collect: counts.map(|c| i64v(c, &["collect", "collect_count"])).unwrap_or(0),
-            comment: counts.map(|c| i64v(c, &["comment", "comment_count"])).unwrap_or(0),
+            collect: counts
+                .map(|c| i64v(c, &["collect", "collect_count"]))
+                .unwrap_or(0),
+            comment: counts
+                .map(|c| i64v(c, &["comment", "comment_count"]))
+                .unwrap_or(0),
             hot: counts.map(|c| i64v(c, &["hot", "hot_count"])).unwrap_or(0),
-            like: counts.map(|c| i64v(c, &["like", "like_count"])).unwrap_or(0),
+            like: counts
+                .map(|c| i64v(c, &["like", "like_count"]))
+                .unwrap_or(0),
         },
         author: DetailAuthor {
             id: author.map(|a| i64v(a, &["id", "user_id"])).unwrap_or(0),
-            name: author.map(|a| text(a, &["name", "nickname", "username"])).unwrap_or_default(),
+            name: author
+                .map(|a| text(a, &["name", "nickname", "username"]))
+                .unwrap_or_default(),
             avatar: author.and_then(|a| opt_text(a, &["avatar", "avatar_url"])),
             followers: author.map(|a| i64v(a, &["followers", "fans"])),
             is_following: author.map(|a| boolv(a, &["is_following", "following"])),
@@ -477,7 +509,9 @@ pub fn map_play_info(v: &Value) -> PlayInfo {
         ep_num: i64v(info, &["ep_num", "ep"]),
         duration: i64v(info, &["duration"]),
         title: text(info, &["title", "name"]),
-        video_url: opt_text(info, &["video_url"]).or(stream_main.clone()).unwrap_or_default(),
+        video_url: opt_text(info, &["video_url"])
+            .or(stream_main.clone())
+            .unwrap_or_default(),
         video_url_hevc: opt_text(info, &["video_url_hevc"]).or(stream_hevc.clone()),
         streams: streams.map(|_| PlayStreams {
             main: stream_main,
@@ -496,7 +530,13 @@ fn map_counts(v: &Value) -> BTreeMap<String, i64> {
         }
     }
     for key in [
-        "like_count", "following", "followers", "video_count", "post_count", "fans", "likes",
+        "like_count",
+        "following",
+        "followers",
+        "video_count",
+        "post_count",
+        "fans",
+        "likes",
     ] {
         if let Some(n) = get(v, key).and_then(Value::as_i64) {
             out.entry(key.to_string()).or_insert(n);

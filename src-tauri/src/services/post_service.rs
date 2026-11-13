@@ -32,6 +32,11 @@ pub async fn post_categories(api: &Api) -> Result<Value, String> {
     Ok(serde_json::json!({ "items": adapter(api).post_categories().await? }))
 }
 
-pub async fn post_category(api: &Api, route: String, page: u32, size: u32) -> Result<Value, String> {
+pub async fn post_category(
+    api: &Api,
+    route: String,
+    page: u32,
+    size: u32,
+) -> Result<Value, String> {
     to_json(&adapter(api).post_category(&route, page, size).await?)
 }

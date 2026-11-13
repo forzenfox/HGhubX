@@ -90,8 +90,10 @@ pub fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
     let metrics = MainThreadMarker::new().and_then(measure_buttons);
     if let Some(metrics) = metrics {
         let x = config.traffic_light_position.as_ref().map_or(14.0, |p| p.x);
-        builder = builder
-            .traffic_light_position(LogicalPosition::new(x, centered_y(metrics, TITLEBAR_HEIGHT)));
+        builder = builder.traffic_light_position(LogicalPosition::new(
+            x,
+            centered_y(metrics, TITLEBAR_HEIGHT),
+        ));
     }
     builder.build()?;
     Ok(())
@@ -104,16 +106,31 @@ mod tests {
     #[test]
     fn centers_buttons_in_titlebar() {
         // macOS 27 实测：按钮 14pt，默认标题栏 32pt，按钮距底 9pt
-        let measured = ButtonMetrics { height: 14.0, bottom: 9.0 };
+        let measured = ButtonMetrics {
+            height: 14.0,
+            bottom: 9.0,
+        };
         let y = centered_y(measured, 44.0);
         assert_eq!(y, 24.0);
         // 代回 tao 的布局：按钮中心 = y - bottom + height / 2 = 标题栏中心
         assert_eq!(y - measured.bottom + measured.height / 2.0, 22.0);
         assert_eq!(centered_y(measured, 52.0), 28.0);
         // 按钮尺寸 / 默认边距不同的系统版本得到不同的 y
-        let other = ButtonMetrics { height: 16.0, bottom: 6.0 };
+        let other = ButtonMetrics {
+            height: 16.0,
+            bottom: 6.0,
+        };
         assert_eq!(centered_y(other, 44.0), 20.0);
         // 奇数差值取整到整点
-        assert_eq!(centered_y(ButtonMetrics { height: 13.0, bottom: 9.0 }, 44.0), 25.0);
+        assert_eq!(
+            centered_y(
+                ButtonMetrics {
+                    height: 13.0,
+                    bottom: 9.0
+                },
+                44.0
+            ),
+            25.0
+        );
     }
 }

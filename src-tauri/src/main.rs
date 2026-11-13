@@ -1,4 +1,7 @@
-#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
 
 fn main() {
     // Linux 混合显卡（Intel 显示 + NVIDIA 独显）机器上，WebKitGTK 的 GL 合成在 Intel 核显侧，
