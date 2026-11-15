@@ -1,9 +1,15 @@
 mod api;
+#[cfg(any(target_os = "macos", target_os = "ios", test))]
+mod apple_proxy;
+mod cache;
+mod env;
 #[cfg(target_os = "ios")]
 mod ios_layout;
 mod lines;
 #[cfg(target_os = "linux")]
 mod linux_http;
+#[cfg(target_os = "linux")]
+mod linux_webview;
 mod logging;
 #[cfg(target_os = "macos")]
 mod macos_titlebar;
@@ -12,6 +18,8 @@ mod media_dns;
 mod net;
 mod network_policy;
 mod playback_log;
+mod proxy;
+mod search_hot;
 mod session;
 
 use api::Api;
@@ -99,6 +107,12 @@ pub fn run() {
         })
         .plugin(
             tauri::plugin::Builder::<_, ()>::new("navigation-guard")
+                .on_webview_ready(|webview| {
+                    #[cfg(target_os = "linux")]
+                    linux_webview::configure(&webview);
+                    #[cfg(not(target_os = "linux"))]
+                    let _ = webview;
+                })
                 .on_navigation(|_webview, url| {
                     let host = url.host_str().unwrap_or("");
                     (url.scheme() == "tauri" && host == "localhost")
@@ -149,11 +163,21 @@ pub fn run() {
             let uri = request.uri().clone();
             let path = uri.path().to_string();
             let query = uri.query().unwrap_or("").to_string();
+            // iOS 原生播放器会用小范围请求探测资源。只处理无条件、单头 GET Range；
+            // 尚无 ETag/Last-Modified 可校验时，If-Range 保守退回完整响应。
+            let range = if request.method() == tauri::http::Method::GET
+                && !request.headers().contains_key("If-Range")
+                && request.headers().get_all("Range").iter().count() == 1
+            {
+                request.headers().get("Range").and_then(|v| v.to_str().ok()).map(str::to_owned)
+            } else {
+                None
+            };
             // 自定义协议基址随平台不同，统一定义在 media::LOCAL_ORIGIN
             // （Windows/Android 是 http://<scheme>.localhost，macOS/iOS/Linux 是 <scheme>://localhost）。
             // 它同时是 m3u8 分片/key 改写用的前缀，必须与前端 src/api.ts 的 LOCAL 一致。
             tauri::async_runtime::spawn(async move {
-                let mut resp = media::handle(&path, &query, media::LOCAL_ORIGIN).await;
+                let mut resp = media::handle(&path, &query, media::LOCAL_ORIGIN, range.as_deref()).await;
                 if let Some(origin) =
                     request_origin.and_then(|s| tauri::http::HeaderValue::from_str(&s).ok())
                 {
@@ -180,11 +204,17 @@ pub fn run() {
             api::net_diag,
             api::line_state,
             api::line_set,
+            api::line_custom_set,
+            api::line_reset,
+            api::line_cancel,
             api::line_mirrors,
             api::line_probe,
             api::line_auto,
             api::line_try_main,
             api::line_health,
+            api::proxy_state,
+            api::proxy_set,
+            api::proxy_test,
             api::check_update,
             api::open_url,
             api::set_orientation,
@@ -193,6 +223,9 @@ pub fn run() {
             api::api_register,
             api::api_logout,
             api::api_me,
+            api::api_account_history,
+            api::api_account_history_record,
+            api::api_account_history_delete,
             api::api_feed,
             api::api_original_videos,
             api::api_topics,

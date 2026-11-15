@@ -4,6 +4,7 @@ import { isLocalMedia, platform, playlist } from "../api";
 import { mediaErrorMessage } from "../mediaErrors";
 import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "../playbackDiagnostics";
 import { usePlaybackActivity } from "../usePlaybackActivity";
+import { useProxyPlaybackRecovery } from "../useProxyPlaybackRecovery";
 
 export type VideoHandle = {
   el: () => HTMLVideoElement | null;
@@ -52,15 +53,20 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
   const recoverCountRef = useRef(0);
   const recoverTimerRef = useRef<number | null>(null);
   const nearEndFiredRef = useRef(false);
+  const reportedSizeRef = useRef({ w: 0, h: 0 });
   const [ready, setReady] = useState(false);
   const { trace, requestSeek } = usePlayerDiagnostics(videoRef, hlsRef, { ...diagnosticContext, active, resource: mediaResource(src) });
   const activity = usePlaybackActivity(videoRef, hlsRef, { active, autoPlay, src, trace });
+  const proxyRecovery = useProxyPlaybackRecovery(videoRef, src, activity, trace);
 
   const reportSize = (v: HTMLVideoElement | null) => {
     if (!v) return;
     const w = v.videoWidth || 0;
     const h = v.videoHeight || 0;
-    if (w > 0 && h > 0) onSize?.(w, h);
+    if (w > 0 && h > 0 && (w !== reportedSizeRef.current.w || h !== reportedSizeRef.current.h)) {
+      reportedSizeRef.current = { w, h };
+      onSize?.(w, h);
+    }
   };
 
   useImperativeHandle(ref, () => ({
@@ -96,8 +102,10 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
     const video = videoRef.current;
     if (!video || !src) return;
     setReady(false);
+    reportedSizeRef.current = { w: 0, h: 0 };
     nearEndFiredRef.current = false;
     recoverCountRef.current = 0;
+    const resume = proxyRecovery.resume();
     const onVideoResize = () => reportSize(video);
     video.addEventListener("resize", onVideoResize);
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
@@ -128,6 +136,7 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
         // Prefer standard MSE on macOS; hls.js handles MMS-only fallback and seek recovery.
         preferManagedMediaSource: false,
         autoStartLoad: false,
+        startPosition: resume?.time ?? -1,
         maxBufferLength: 30,
         maxMaxBufferLength: 60,
         backBufferLength: 30,
@@ -145,20 +154,16 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
       hls.loadSource(url);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (activity.isActive()) hls.startLoad();
-        if (autoPlay) activity.play("manifest_autoplay", true);
+        if (activity.isActive()) hls.startLoad(resume?.time ?? -1);
+        if (autoPlay && !resume) activity.play("manifest_autoplay", true);
       });
       hls.on(Hls.Events.FRAG_BUFFERED, () => { recoverCountRef.current = 0; });
       hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (!data.fatal) {
-          if (
-            data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR ||
-            data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR
-          ) {
-            try { hls.startLoad(video.currentTime || -1); } catch { /* ignore */ }
-          }
-          return;
-        }
+        // hls.js already retries recoverable fragment errors and reports buffer
+        // stalls while its loader is still active. Calling startLoad() for every
+        // such event bypasses that backoff and turns a transient outage into a
+        // request storm.
+        if (!data.fatal) return;
         if (!activity.isActive()) return;
         const retry = () => {
           recoverCountRef.current += 1;
@@ -174,13 +179,13 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR && recoverCountRef.current < 4) { retry(); return; }
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoverCountRef.current < 4) { retry(); return; }
         onError?.(`${data.type}/${data.details}`);
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-        else { hls.destroy(); hlsRef.current = null; }
+        if (data.type !== Hls.ErrorTypes.NETWORK_ERROR && data.type !== Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.destroy(); hlsRef.current = null;
+        }
       });
     } else {
       video.src = url;
-      if (autoPlay) activity.play("native_autoplay", true);
+      if (autoPlay && !resume) activity.play("native_autoplay", true);
     }
 
     return () => {
@@ -190,7 +195,7 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src]);
+  }, [src, proxyRecovery.revision]);
 
   // iOS 内联播放：部分 WKWebView 只认 HTML 属性
   useEffect(() => {
